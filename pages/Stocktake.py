@@ -75,6 +75,17 @@ VISIBLE_FIELDS = [
     "FRSTATUS", "AVAILFROM", "NOTE"
 ]
 
+# --- Shared scanned barcodes CSV ---
+SCANNED_FILE = os.path.join(os.path.dirname(__file__), "..", "scanned_barcodes.csv")
+
+def load_scanned_barcodes():
+    if os.path.exists(SCANNED_FILE):
+        return pd.read_csv(SCANNED_FILE)["barcode"].astype(str).tolist()
+    return []
+
+def save_scanned_barcodes(barcodes):
+    pd.DataFrame({"barcode": barcodes}).to_csv(SCANNED_FILE, index=False)
+
 # --- Load inventory ---
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
 inventory_files = [f for f in os.listdir(INVENTORY_FOLDER) if f.lower().endswith(('.xlsx', '.csv'))]
@@ -107,13 +118,10 @@ if barcode_col not in df.columns:
 # Clean the DataFrame barcodes as strings
 df[barcode_col] = df[barcode_col].map(clean_barcode).astype(str)
 
-st.title("Stocktake - Scan Barcodes")
+st.title("Stocktake - Scan Barcodes (Shared)")
 
-# --- Session state for scanned barcodes and delete prompt ---
-if "scanned_barcodes" not in st.session_state:
-    st.session_state["scanned_barcodes"] = []
-if "confirm_clear_scanned_barcodes" not in st.session_state:
-    st.session_state["confirm_clear_scanned_barcodes"] = False
+# --- Shared scanned barcodes list ---
+scanned_barcodes = load_scanned_barcodes()
 
 # --- Scan input using a form (clears on submit) ---
 with st.form("stocktake_scan_form", clear_on_submit=True):
@@ -123,11 +131,13 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
         cleaned = clean_barcode(scanned_barcode)
         if cleaned == "":
             st.warning("Please scan or enter a barcode.")
-        elif cleaned in st.session_state["scanned_barcodes"]:
-            st.warning("Barcode already scanned in this session.")
+        elif cleaned in scanned_barcodes:
+            st.warning("Barcode already scanned.")
         elif cleaned in df[barcode_col].values:
-            st.session_state["scanned_barcodes"].append(str(cleaned))
+            scanned_barcodes.append(str(cleaned))
+            save_scanned_barcodes(scanned_barcodes)
             st.success(f"Added barcode: {cleaned}")
+            st.experimental_rerun()
         else:
             st.error("Barcode not found in inventory.")
 
@@ -144,9 +154,11 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
         yes_col, no_col = st.columns([1, 1])
         with yes_col:
             if st.button("Yes, Empty Table", key="confirm_empty_scanned_btn"):
-                st.session_state["scanned_barcodes"].clear()
+                scanned_barcodes = []
+                save_scanned_barcodes(scanned_barcodes)
                 st.session_state["confirm_clear_scanned_barcodes"] = False
                 st.success("Scanned products table emptied.")
+                st.experimental_rerun()
         with no_col:
             if st.button("Cancel", key="cancel_empty_scanned_btn"):
                 st.session_state["confirm_clear_scanned_barcodes"] = False
@@ -163,7 +175,7 @@ def format_inventory_table(input_df):
     return clean_nans(df_disp)
 
 # --- Table of scanned products as ONE table, most recent scan on top ---
-ordered_barcodes = list(reversed(st.session_state["scanned_barcodes"]))
+ordered_barcodes = list(reversed(scanned_barcodes))
 present_barcodes = [b for b in ordered_barcodes if b in df[barcode_col].values]
 scanned_df = df[df[barcode_col].isin(present_barcodes)]
 if not scanned_df.empty:
@@ -180,11 +192,9 @@ if not scanned_df.empty:
     if remove_options:
         remove_barcode = st.selectbox("Select a barcode to remove", remove_options)
         if st.button("Remove Selected"):
-            st.session_state["scanned_barcodes"] = [
-                b for b in st.session_state["scanned_barcodes"]
-                if clean_barcode(b) != clean_barcode(remove_barcode)
-            ]
-            st.experimental_rerun() if hasattr(st, "experimental_rerun") else None
+            scanned_barcodes = [b for b in scanned_barcodes if b != remove_barcode]
+            save_scanned_barcodes(scanned_barcodes)
+            st.experimental_rerun()
 
     st.download_button(
         label="Download Scanned Table (CSV)",
@@ -206,7 +216,7 @@ else:
 
 # --- Optional: Show missing items ---
 if st.checkbox("Show missing products (in inventory but not scanned)"):
-    missing_df = df[~df[barcode_col].isin(st.session_state["scanned_barcodes"])]
+    missing_df = df[~df[barcode_col].isin(scanned_barcodes)]
     st.markdown("### Missing Products")
     st.dataframe(format_inventory_table(missing_df), width='stretch')
     if not missing_df.empty:
