@@ -167,8 +167,9 @@ ordered_barcodes = list(reversed(st.session_state["scanned_barcodes"]))
 present_barcodes = [b for b in ordered_barcodes if b in df[barcode_col].values]
 scanned_df = df[df[barcode_col].isin(present_barcodes)]
 if not scanned_df.empty:
-    scanned_df['__order'] = scanned_df[barcode_col].apply(lambda x: present_barcodes.index(x))
-    scanned_df = scanned_df.sort_values('__order').drop(columns='__order')
+    scanned_df = scanned_df.assign(
+        __order=scanned_df[barcode_col].apply(lambda x: present_barcodes.index(x))
+    ).sort_values('__order').drop(columns='__order')
     display_df = clean_for_display(scanned_df)
     display_df = display_df[[col for col in VISIBLE_FIELDS if col in display_df.columns]]
     st.markdown("### Scanned Products Table")
