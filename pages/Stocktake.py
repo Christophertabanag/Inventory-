@@ -25,12 +25,17 @@ st.markdown("""
         color: white !important;
         font-weight: bold;
     }
-    button#confirm_empty_scanned_btn {
+    div[data-testid="column"] button#empty_unfound_btn {
+        background-color: #a569bd !important;
+        color: white !important;
+        font-weight: bold;
+    }
+    button#confirm_empty_scanned_btn, button#confirm_empty_unfound_btn {
         background-color: #3498db !important;
         color: white !important;
         font-weight: bold;
     }
-    button#cancel_empty_scanned_btn {
+    button#cancel_empty_scanned_btn, button#cancel_empty_unfound_btn {
         background-color: #f1c40f !important;
         color: black !important;
         font-weight: bold;
@@ -99,6 +104,9 @@ def load_unfound_barcodes():
 
 def save_unfound_barcodes(df):
     df.to_csv(UNFOUND_FILE, index=False)
+
+def empty_unfound_barcodes():
+    pd.DataFrame(columns=["barcode", "timestamp"]).to_csv(UNFOUND_FILE, index=False)
 
 # --- Load inventory ---
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
@@ -224,7 +232,7 @@ if st.session_state.get("last_unfound_barcode", None):
         elif hasattr(st, "experimental_rerun"):
             st.experimental_rerun()
 
-# --- Empty Table Functionality with Confirmation Prompt ---
+# --- Empty Table Functionality with Confirmation Prompt for scanned barcodes ---
 st.markdown("#### Manage Scanned Products Table")
 clear_col, prompt_col = st.columns([1, 6], gap="small")
 with clear_col:
@@ -324,8 +332,32 @@ if not scanned_df.empty:
 else:
     st.info("No scanned products to display.")
 
-# --- Unfound Barcodes Table at the Bottom ---
+# --- Unfound Barcodes Table at the Bottom w/ empty functionality ---
 st.markdown("### Unfound Barcodes Table")
+
+# Button to empty unfound barcodes table with confirmation
+unfound_clear_col, unfound_prompt_col = st.columns([1, 6], gap="small")
+with unfound_clear_col:
+    if st.button("🗑️ Empty Unfound Table", key="empty_unfound_btn"):
+        st.session_state["confirm_clear_unfound_barcodes"] = True
+
+if st.session_state.get("confirm_clear_unfound_barcodes", False):
+    with unfound_prompt_col:
+        st.warning("Are you sure you want to **empty the unfound barcodes table**? This cannot be undone.")
+        yes_unfound_col, no_unfound_col = st.columns([1, 1])
+        with yes_unfound_col:
+            if st.button("Yes, Empty Unfound Table", key="confirm_empty_unfound_btn"):
+                empty_unfound_barcodes()
+                st.session_state["confirm_clear_unfound_barcodes"] = False
+                st.success("Unfound barcodes table emptied.")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                elif hasattr(st, "experimental_rerun"):
+                    st.experimental_rerun()
+        with no_unfound_col:
+            if st.button("Cancel", key="cancel_empty_unfound_btn"):
+                st.session_state["confirm_clear_unfound_barcodes"] = False
+
 unfound_df = load_unfound_barcodes()
 if not unfound_df.empty:
     unfound_df = unfound_df[::-1]  # Show most recent first
