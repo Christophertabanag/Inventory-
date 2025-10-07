@@ -4,6 +4,10 @@ import os
 import io
 from datetime import datetime
 
+# Barcode image generation
+import barcode
+from barcode.writer import ImageWriter
+
 # --- Custom CSS for button colors ---
 st.markdown("""
     <style>
@@ -154,6 +158,27 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
             save_scanned_barcodes(scanned_barcodes)
             st.success(f"Added barcode: {cleaned}")
             st.session_state["last_unfound_barcode"] = None
+
+            # --- Show product details and barcode image ---
+            product_row = df[df[barcode_col] == cleaned].iloc[0]
+            framecode = product_row.get("FRAMENUM", "N/A")
+            model = product_row.get("MODEL", "N/A")
+            manufact = product_row.get("MANUFACT", "N/A")
+            st.markdown(f"**Framecode:** {framecode}")
+            st.markdown(f"**Model:** {model}")
+            st.markdown(f"**Manufacturer:** {manufact}")
+
+            # --- Generate and display barcode image ---
+            try:
+                CODE128 = barcode.get_barcode_class('code128')
+                barcode_img = CODE128(str(cleaned), writer=ImageWriter())
+                buffer = io.BytesIO()
+                barcode_img.write(buffer)
+                buffer.seek(0)
+                st.image(buffer, caption=f"Barcode: {cleaned}", width=350)
+            except Exception as e:
+                st.warning("Could not generate barcode image.")
+
             if hasattr(st, "rerun"):
                 st.rerun()
             elif hasattr(st, "experimental_rerun"):
@@ -204,6 +229,16 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
                 st.session_state["confirm_clear_scanned_barcodes"] = False
 
 # --- Optional: Show missing items ---
+def format_inventory_table(input_df):
+    df_disp = input_df.copy()
+    cols = [col for col in VISIBLE_FIELDS if col in df_disp.columns]
+    df_disp = df_disp[cols]
+    if "BARCODE" in df_disp.columns:
+        df_disp["BARCODE"] = df_disp["BARCODE"].map(clean_barcode)
+    if "RRP" in df_disp.columns:
+        df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
+    return clean_nans(df_disp)
+
 if st.checkbox("Show missing products (in inventory but not scanned)"):
     missing_df = df[~df[barcode_col].isin(scanned_barcodes)]
     st.markdown("### Missing Products")
@@ -224,17 +259,6 @@ if st.checkbox("Show missing products (in inventory but not scanned)"):
             file_name="stocktake_missing.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-# --- Table formatting helper ---
-def format_inventory_table(input_df):
-    df_disp = input_df.copy()
-    cols = [col for col in VISIBLE_FIELDS if col in df_disp.columns]
-    df_disp = df_disp[cols]
-    if "BARCODE" in df_disp.columns:
-        df_disp["BARCODE"] = df_disp["BARCODE"].map(clean_barcode)
-    if "RRP" in df_disp.columns:
-        df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
-    return clean_nans(df_disp)
 
 # --- Table of scanned products as ONE table, most recent scan on top ---
 ordered_barcodes = list(reversed(scanned_barcodes))
