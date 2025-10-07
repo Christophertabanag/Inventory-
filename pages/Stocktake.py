@@ -169,30 +169,37 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
             st.error("Barcode not found in inventory.")
             st.session_state["last_unfound_barcode"] = cleaned
 
-# --- Show details for last successful barcode scanned (persists after rerun) ---
+# --- Show details for last successful barcode scanned (persists after rerun, compact layout) ---
 if st.session_state.get("last_success_barcode"):
     last_barcode = st.session_state["last_success_barcode"]
     if last_barcode in df[barcode_col].values:
-        st.markdown("### Last Scanned Product Details")
         product_row = df[df[barcode_col] == last_barcode].iloc[0]
         framecode = product_row.get("FRAMENUM", "N/A")
         model = product_row.get("MODEL", "N/A")
         manufact = product_row.get("MANUFACT", "N/A")
-        st.markdown(f"**Framecode:** {framecode}")
-        st.markdown(f"**Model:** {model}")
-        st.markdown(f"**Manufacturer:** {manufact}")
-        # --- Generate and display barcode image ---
-        try:
-            CODE128 = barcode.get_barcode_class('code128')
-            barcode_img = CODE128(str(last_barcode), writer=ImageWriter())
-            buffer = io.BytesIO()
-            barcode_img.write(buffer)
-            buffer.seek(0)
-            st.image(buffer, caption=f"Barcode: {last_barcode}", width=350)
-        except Exception as e:
-            st.warning("Could not generate barcode image.")
+        # Layout: barcode image left, details right
+        img_col, details_col = st.columns([1, 3])
+        with img_col:
+            try:
+                CODE128 = barcode.get_barcode_class('code128')
+                barcode_img = CODE128(str(last_barcode), writer=ImageWriter())
+                buffer = io.BytesIO()
+                barcode_img.write(buffer)
+                buffer.seek(0)
+                st.image(buffer, caption="", width=120)
+            except Exception as e:
+                st.warning("Could not generate barcode image.")
+        with details_col:
+            st.markdown(
+                f"<div style='font-size:15px; line-height:1.5em; margin-top:16px;'>"
+                f"<b>Barcode:</b> {last_barcode} &nbsp; | &nbsp; "
+                f"<b>Framecode:</b> {framecode} &nbsp; | &nbsp; "
+                f"<b>Model:</b> {model} &nbsp; | &nbsp; "
+                f"<b>Manufacturer:</b> {manufact}"
+                f"</div>", unsafe_allow_html=True
+            )
     else:
-        st.session_state["last_success_barcode"] = None  # Clean up if not in inventory
+        st.session_state["last_success_barcode"] = None
 
 # --- Show button to add last unfound barcode (outside the form) ---
 if st.session_state.get("last_unfound_barcode", None):
