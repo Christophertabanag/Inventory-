@@ -33,7 +33,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Utility Functions ---
 def clean_barcode(val):
     try:
         if pd.isnull(val) or val == "":
@@ -105,6 +104,9 @@ if barcode_col not in df.columns:
     st.error(f"No {barcode_col} column found in your inventory file!")
     st.stop()
 
+# Clean the DataFrame barcodes as strings
+df[barcode_col] = df[barcode_col].map(clean_barcode).astype(str)
+
 st.title("Stocktake - Scan Barcodes")
 
 # --- Session state for scanned barcodes and delete prompt ---
@@ -123,8 +125,8 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
             st.warning("Please scan or enter a barcode.")
         elif cleaned in st.session_state["scanned_barcodes"]:
             st.warning("Barcode already scanned in this session.")
-        elif cleaned in df[barcode_col].map(clean_barcode).values:
-            st.session_state["scanned_barcodes"].append(cleaned)
+        elif cleaned in df[barcode_col].values:
+            st.session_state["scanned_barcodes"].append(str(cleaned))
             st.success(f"Added barcode: {cleaned}")
         else:
             st.error("Barcode not found in inventory.")
@@ -160,18 +162,16 @@ def format_inventory_table(input_df):
         df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
     return clean_nans(df_disp)
 
-# --- Table of scanned products as ONE table, most recent on top ---
+# --- Table of scanned products as ONE table, most recent scan on top ---
 ordered_barcodes = list(reversed(st.session_state["scanned_barcodes"]))
-scanned_df = df.set_index(barcode_col, drop=False)
-scanned_df = scanned_df.loc[
-    [b for b in ordered_barcodes if b in scanned_df.index]
-] if ordered_barcodes else pd.DataFrame(columns=df.columns)
-
-st.markdown("### Scanned Products Table")
-
+present_barcodes = [b for b in ordered_barcodes if b in df[barcode_col].values]
+scanned_df = df[df[barcode_col].isin(present_barcodes)]
 if not scanned_df.empty:
+    scanned_df['__order'] = scanned_df[barcode_col].apply(lambda x: present_barcodes.index(x))
+    scanned_df = scanned_df.sort_values('__order').drop(columns='__order')
     display_df = clean_for_display(scanned_df)
     display_df = display_df[[col for col in VISIBLE_FIELDS if col in display_df.columns]]
+    st.markdown("### Scanned Products Table")
     st.dataframe(display_df, width='stretch', hide_index=True)
 
     # Remove functionality: select barcode and remove with button
@@ -205,7 +205,7 @@ else:
 
 # --- Optional: Show missing items ---
 if st.checkbox("Show missing products (in inventory but not scanned)"):
-    missing_df = df[~df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
+    missing_df = df[~df[barcode_col].isin(st.session_state["scanned_barcodes"])]
     st.markdown("### Missing Products")
     st.dataframe(format_inventory_table(missing_df), width='stretch')
     if not missing_df.empty:
