@@ -177,7 +177,10 @@ if st.session_state.get("last_success_barcode"):
         framecode = product_row.get("FRAMENUM", "N/A")
         model = product_row.get("MODEL", "N/A")
         manufact = product_row.get("MANUFACT", "N/A")
-        # Layout: barcode image left, details right
+        colour = product_row.get("FCOLOUR", "N/A")
+        frametype = product_row.get("FRAMETYPE", "N/A")
+        size = product_row.get("SIZE", "N/A")
+        rrp = product_row.get("RRP", "N/A")
         img_col, details_col = st.columns([1, 3])
         with img_col:
             try:
@@ -195,7 +198,11 @@ if st.session_state.get("last_success_barcode"):
                 f"<b>Barcode:</b> {last_barcode} &nbsp; | &nbsp; "
                 f"<b>Framecode:</b> {framecode} &nbsp; | &nbsp; "
                 f"<b>Model:</b> {model} &nbsp; | &nbsp; "
-                f"<b>Manufacturer:</b> {manufact}"
+                f"<b>Manufacturer:</b> {manufact} &nbsp; | &nbsp; "
+                f"<b>Colour:</b> {colour} &nbsp; | &nbsp; "
+                f"<b>Frametype:</b> {frametype} &nbsp; | &nbsp; "
+                f"<b>Size:</b> {size} &nbsp; | &nbsp; "
+                f"<b>RRP:</b> {rrp}"
                 f"</div>", unsafe_allow_html=True
             )
     else:
