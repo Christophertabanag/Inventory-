@@ -160,26 +160,25 @@ def format_inventory_table(input_df):
         df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
     return clean_nans(df_disp)
 
-# --- Table of scanned products WITH REMOVE BUTTONS PER ROW ---
+# --- Table of scanned products as ONE table ---
 scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
 st.markdown("### Scanned Products Table")
 
 if not scanned_df.empty:
     display_df = clean_for_display(scanned_df)
-    for i, row in display_df.iterrows():
-        cols = st.columns([8, 1])
-        with cols[0]:
-            # Only display VISIBLE_FIELDS that exist
-            display_row = pd.DataFrame([row])
-            display_row = display_row[[col for col in VISIBLE_FIELDS if col in display_row.columns]]
-            st.dataframe(display_row, use_container_width=True, hide_index=True)
-        with cols[1]:
-            if st.button("Remove", key=f"remove_scanned_{row[barcode_col]}_{i}"):
-                st.session_state["scanned_barcodes"] = [
-                    b for b in st.session_state["scanned_barcodes"]
-                    if clean_barcode(b) != clean_barcode(row[barcode_col])
-                ]
-                st.experimental_rerun() if hasattr(st, "experimental_rerun") else None
+    display_df = display_df[[col for col in VISIBLE_FIELDS if col in display_df.columns]]
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # Remove functionality: select barcode and remove with button
+    remove_options = display_df["BARCODE"].tolist()
+    if remove_options:
+        remove_barcode = st.selectbox("Select a barcode to remove", remove_options)
+        if st.button("Remove Selected"):
+            st.session_state["scanned_barcodes"] = [
+                b for b in st.session_state["scanned_barcodes"]
+                if clean_barcode(b) != clean_barcode(remove_barcode)
+            ]
+            st.experimental_rerun() if hasattr(st, "experimental_rerun") else None
 
     st.download_button(
         label="Download Scanned Table (CSV)",
