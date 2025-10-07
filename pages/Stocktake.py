@@ -137,7 +137,10 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
             scanned_barcodes.append(str(cleaned))
             save_scanned_barcodes(scanned_barcodes)
             st.success(f"Added barcode: {cleaned}")
-            st.experimental_rerun()
+            if hasattr(st, "rerun"):
+                st.rerun()
+            elif hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
         else:
             st.error("Barcode not found in inventory.")
 
@@ -158,7 +161,10 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
                 save_scanned_barcodes(scanned_barcodes)
                 st.session_state["confirm_clear_scanned_barcodes"] = False
                 st.success("Scanned products table emptied.")
-                st.experimental_rerun()
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                elif hasattr(st, "experimental_rerun"):
+                    st.experimental_rerun()
         with no_col:
             if st.button("Cancel", key="cancel_empty_scanned_btn"):
                 st.session_state["confirm_clear_scanned_barcodes"] = False
@@ -194,7 +200,10 @@ if not scanned_df.empty:
         if st.button("Remove Selected"):
             scanned_barcodes = [b for b in scanned_barcodes if b != remove_barcode]
             save_scanned_barcodes(scanned_barcodes)
-            st.experimental_rerun()
+            if hasattr(st, "rerun"):
+                st.rerun()
+            elif hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
 
     st.download_button(
         label="Download Scanned Table (CSV)",
