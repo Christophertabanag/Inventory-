@@ -7,6 +7,28 @@ import barcode
 from barcode.writer import ImageWriter
 import io
 
+# --- SESSION STATE PATCHES FOR SAFE BARCODE/FRAMECODE HANDLING ---
+if st.session_state.get("clear_barcode_textinput", False):
+    st.session_state["barcode_textinput"] = ""
+    st.session_state["clear_barcode_textinput"] = False
+    st.experimental_rerun()
+
+if st.session_state.get("set_barcode_textinput", False):
+    st.session_state["barcode_textinput"] = st.session_state.get("barcode", "")
+    st.session_state["set_barcode_textinput"] = False
+    st.experimental_rerun()
+
+if st.session_state.get("clear_framecode", False):
+    st.session_state["framecode"] = ""
+    st.session_state["clear_framecode"] = False
+    st.experimental_rerun()
+
+if st.session_state.get("set_framecode", False):
+    # No-op: framecode already set.
+    st.session_state["set_framecode"] = False
+    st.experimental_rerun()
+# ------------------------------------------------------------------
+
 # --- Custom CSS for green buttons and narrower textfields ---
 st.markdown("""
     <style>
@@ -204,6 +226,8 @@ if "add_product_expanded" not in st.session_state:
     st.session_state["add_product_expanded"] = False
 if "barcode" not in st.session_state:
     st.session_state["barcode"] = ""
+if "barcode_textinput" not in st.session_state:
+    st.session_state["barcode_textinput"] = ""
 if "framecode" not in st.session_state:
     st.session_state["framecode"] = ""
 if "edit_product_index" not in st.session_state:
@@ -239,7 +263,9 @@ btn_col1, btn_col2 = st.columns(2)
 with btn_col1:
     if st.button("Generate Barcode", key="generate_barcode_btn"):
         st.session_state["barcode"] = generate_unique_barcode(df)
+        st.session_state["set_barcode_textinput"] = True
         st.session_state["add_product_expanded"] = True
+        st.experimental_rerun()
 with btn_col2:
     supplier_val = st.text_input(
         "Enter Supplier for Framecode Generation",
@@ -250,7 +276,9 @@ with btn_col2:
     if st.button("Generate Framecode", key="generate_framecode_btn"):
         if st.session_state["supplier_for_framecode"]:
             st.session_state["framecode"] = generate_framecode(st.session_state["supplier_for_framecode"], df)
+            st.session_state["set_framecode"] = True
             st.session_state["add_product_expanded"] = True
+            st.experimental_rerun()
         else:
             st.warning("⚠️ Please enter a supplier name first.")
 
@@ -370,11 +398,11 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                 else:
                     df.to_csv(INVENTORY_FILE, index=False)
                 st.success(f"✅ Product added successfully!")
-                # Do NOT reset st.session_state["barcode_textinput"] or st.session_state["framecode"] after widget instantiation!
-                st.session_state["barcode"] = ""
-                st.session_state["framecode"] = ""
+                # Use flags to clear barcode/framecode fields safely
+                st.session_state["clear_barcode_textinput"] = True
+                st.session_state["clear_framecode"] = True
                 st.session_state["add_product_expanded"] = False
-                st.rerun()
+                st.experimental_rerun()
 
 st.markdown('### Current Inventory')
 df_display = df.copy()
