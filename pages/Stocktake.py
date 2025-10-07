@@ -69,9 +69,11 @@ if barcode_col not in df.columns:
 
 st.title("Stocktake - Scan Barcodes")
 
-# --- Session state for scanned barcodes ---
+# --- Session state for scanned barcodes and delete prompt ---
 if "scanned_barcodes" not in st.session_state:
     st.session_state["scanned_barcodes"] = []
+if "confirm_clear_scanned_barcodes" not in st.session_state:
+    st.session_state["confirm_clear_scanned_barcodes"] = False
 
 # --- Scan input using a form (clears on submit) ---
 with st.form("stocktake_scan_form", clear_on_submit=True):
@@ -88,6 +90,26 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
             st.success(f"Added barcode: {cleaned}")
         else:
             st.error("Barcode not found in inventory.")
+
+# --- Empty Table Functionality with Confirmation Prompt ---
+st.markdown("#### Manage Scanned Products Table")
+clear_col, prompt_col = st.columns([1, 6], gap="small")
+with clear_col:
+    if st.button("🗑️ Empty All Scanned Products", key="empty_scanned_btn"):
+        st.session_state["confirm_clear_scanned_barcodes"] = True
+
+if st.session_state.get("confirm_clear_scanned_barcodes", False):
+    with prompt_col:
+        st.warning("Are you sure you want to **empty the scanned products table**? This cannot be undone.")
+        yes_col, no_col = st.columns([1, 1])
+        with yes_col:
+            if st.button("Yes, Empty Table", key="confirm_empty_scanned_btn"):
+                st.session_state["scanned_barcodes"].clear()
+                st.session_state["confirm_clear_scanned_barcodes"] = False
+                st.success("Scanned products table emptied.")
+        with no_col:
+            if st.button("Cancel", key="cancel_empty_scanned_btn"):
+                st.session_state["confirm_clear_scanned_barcodes"] = False
 
 # --- Table formatting helper ---
 def format_inventory_table(input_df):
