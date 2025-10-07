@@ -5,4 +5,3 @@ python-barcode
 PyGithub
 fpdf
 python-barcode
-streamlit>=1.29
