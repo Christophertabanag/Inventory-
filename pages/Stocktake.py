@@ -137,9 +137,11 @@ st.title("Stocktake - Scan Barcodes (Shared)")
 # --- Shared scanned barcodes list ---
 scanned_barcodes = load_scanned_barcodes()
 
-# --- Track the last unfound barcode in session state ---
+# --- Track the last unfound barcode and last successful barcode in session state ---
 if "last_unfound_barcode" not in st.session_state:
     st.session_state["last_unfound_barcode"] = None
+if "last_success_barcode" not in st.session_state:
+    st.session_state["last_success_barcode"] = None
 
 # --- Scan input using a form (clears on submit) ---
 with st.form("stocktake_scan_form", clear_on_submit=True):
@@ -158,27 +160,7 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
             save_scanned_barcodes(scanned_barcodes)
             st.success(f"Added barcode: {cleaned}")
             st.session_state["last_unfound_barcode"] = None
-
-            # --- Show product details and barcode image ---
-            product_row = df[df[barcode_col] == cleaned].iloc[0]
-            framecode = product_row.get("FRAMENUM", "N/A")
-            model = product_row.get("MODEL", "N/A")
-            manufact = product_row.get("MANUFACT", "N/A")
-            st.markdown(f"**Framecode:** {framecode}")
-            st.markdown(f"**Model:** {model}")
-            st.markdown(f"**Manufacturer:** {manufact}")
-
-            # --- Generate and display barcode image ---
-            try:
-                CODE128 = barcode.get_barcode_class('code128')
-                barcode_img = CODE128(str(cleaned), writer=ImageWriter())
-                buffer = io.BytesIO()
-                barcode_img.write(buffer)
-                buffer.seek(0)
-                st.image(buffer, caption=f"Barcode: {cleaned}", width=350)
-            except Exception as e:
-                st.warning("Could not generate barcode image.")
-
+            st.session_state["last_success_barcode"] = cleaned
             if hasattr(st, "rerun"):
                 st.rerun()
             elif hasattr(st, "experimental_rerun"):
@@ -186,6 +168,31 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
         else:
             st.error("Barcode not found in inventory.")
             st.session_state["last_unfound_barcode"] = cleaned
+
+# --- Show details for last successful barcode scanned (persists after rerun) ---
+if st.session_state.get("last_success_barcode"):
+    last_barcode = st.session_state["last_success_barcode"]
+    if last_barcode in df[barcode_col].values:
+        st.markdown("### Last Scanned Product Details")
+        product_row = df[df[barcode_col] == last_barcode].iloc[0]
+        framecode = product_row.get("FRAMENUM", "N/A")
+        model = product_row.get("MODEL", "N/A")
+        manufact = product_row.get("MANUFACT", "N/A")
+        st.markdown(f"**Framecode:** {framecode}")
+        st.markdown(f"**Model:** {model}")
+        st.markdown(f"**Manufacturer:** {manufact}")
+        # --- Generate and display barcode image ---
+        try:
+            CODE128 = barcode.get_barcode_class('code128')
+            barcode_img = CODE128(str(last_barcode), writer=ImageWriter())
+            buffer = io.BytesIO()
+            barcode_img.write(buffer)
+            buffer.seek(0)
+            st.image(buffer, caption=f"Barcode: {last_barcode}", width=350)
+        except Exception as e:
+            st.warning("Could not generate barcode image.")
+    else:
+        st.session_state["last_success_barcode"] = None  # Clean up if not in inventory
 
 # --- Show button to add last unfound barcode (outside the form) ---
 if st.session_state.get("last_unfound_barcode", None):
