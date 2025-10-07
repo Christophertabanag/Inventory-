@@ -158,13 +158,26 @@ def format_inventory_table(input_df):
         df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
     return clean_nans(df_disp)
 
-# --- Table of scanned products ---
+# --- Table of scanned products WITH REMOVE BUTTONS PER ROW ---
 scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
 st.markdown("### Scanned Products Table")
-st.dataframe(format_inventory_table(scanned_df), width='stretch')
 
-# --- Download scanned products ---
 if not scanned_df.empty:
+    for i, row in scanned_df.iterrows():
+        cols = st.columns([8, 1])
+        with cols[0]:
+            # Show product as a flat string for clarity (or use st.write(row) for dict-style)
+            show_row = {col: row[col] for col in scanned_df.columns}
+            st.write(show_row)
+        with cols[1]:
+            if st.button("Remove", key=f"remove_scanned_{row[barcode_col]}"):
+                # Remove this barcode from scanned list
+                st.session_state["scanned_barcodes"] = [
+                    b for b in st.session_state["scanned_barcodes"]
+                    if clean_barcode(b) != clean_barcode(row[barcode_col])
+                ]
+                st.experimental_rerun() if hasattr(st, "experimental_rerun") else None
+
     st.download_button(
         label="Download Scanned Table (CSV)",
         data=format_inventory_table(scanned_df).to_csv(index=False).encode('utf-8'),
@@ -181,6 +194,8 @@ if not scanned_df.empty:
         file_name="stocktake_scanned.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+else:
+    st.info("No scanned products to display.")
 
 # --- Optional: Show missing items ---
 if st.checkbox("Show missing products (in inventory but not scanned)"):
