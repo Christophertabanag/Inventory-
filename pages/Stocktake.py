@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import io
 
 # --- Utility Functions (copy from your main script or utils) ---
 def clean_barcode(val):
@@ -86,9 +87,13 @@ if not scanned_df.empty:
         file_name="stocktake_scanned.csv",
         mime="text/csv"
     )
+    # Excel download with BytesIO buffer
+    excel_buffer = io.BytesIO()
+    clean_nans(scanned_df).to_excel(excel_buffer, index=False)
+    excel_buffer.seek(0)
     st.download_button(
         label="Download Scanned Table (Excel)",
-        data=clean_nans(scanned_df).to_excel(index=False),
+        data=excel_buffer,
         file_name="stocktake_scanned.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -104,4 +109,13 @@ if st.checkbox("Show missing products (in inventory but not scanned)"):
             data=clean_nans(missing_df).to_csv(index=False).encode('utf-8'),
             file_name="stocktake_missing.csv",
             mime="text/csv"
+        )
+        excel_buffer_missing = io.BytesIO()
+        clean_nans(missing_df).to_excel(excel_buffer_missing, index=False)
+        excel_buffer_missing.seek(0)
+        st.download_button(
+            label="Download Missing Table (Excel)",
+            data=excel_buffer_missing,
+            file_name="stocktake_missing.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
