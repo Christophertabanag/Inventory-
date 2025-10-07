@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-# Helper functions (copy from your main script or import if in utils)
+# --- Utility Functions (copy from your main script or utils) ---
 def clean_barcode(val):
     try:
         if pd.isnull(val) or val == "":
@@ -22,7 +22,7 @@ def force_all_columns_to_string(df):
 def clean_nans(df):
     return df.replace([pd.NA, 'nan'], '', regex=True)
 
-# Load inventory
+# --- Load inventory ---
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
 inventory_files = [f for f in os.listdir(INVENTORY_FOLDER) if f.lower().endswith(('.xlsx', '.csv'))]
 selected_file = inventory_files[0]
@@ -57,20 +57,21 @@ st.title("Stocktake - Scan Barcodes")
 if "scanned_barcodes" not in st.session_state:
     st.session_state["scanned_barcodes"] = []
 
-# --- Scan input ---
-scanned_barcode = st.text_input("Scan or enter barcode", value="", key="stocktake_scan_input")
-if st.button("Add Scanned Barcode"):
-    cleaned = clean_barcode(scanned_barcode)
-    if cleaned == "":
-        st.warning("Please scan or enter a barcode.")
-    elif cleaned in st.session_state["scanned_barcodes"]:
-        st.warning("Barcode already scanned in this session.")
-    elif cleaned in df[barcode_col].map(clean_barcode).values:
-        st.session_state["scanned_barcodes"].append(cleaned)
-        st.success(f"Added barcode: {cleaned}")
-    else:
-        st.error("Barcode not found in inventory.")
-    st.session_state["stocktake_scan_input"] = ""  # Clear input after scan
+# --- Scan input using a form (clears on submit) ---
+with st.form("stocktake_scan_form", clear_on_submit=True):
+    scanned_barcode = st.text_input("Scan or enter barcode", key="stocktake_scan_input")
+    submit = st.form_submit_button("Add Scanned Barcode")
+    if submit:
+        cleaned = clean_barcode(scanned_barcode)
+        if cleaned == "":
+            st.warning("Please scan or enter a barcode.")
+        elif cleaned in st.session_state["scanned_barcodes"]:
+            st.warning("Barcode already scanned in this session.")
+        elif cleaned in df[barcode_col].map(clean_barcode).values:
+            st.session_state["scanned_barcodes"].append(cleaned)
+            st.success(f"Added barcode: {cleaned}")
+        else:
+            st.error("Barcode not found in inventory.")
 
 # --- Table of scanned products ---
 scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
