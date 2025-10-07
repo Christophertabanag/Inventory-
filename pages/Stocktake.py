@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import io
+from datetime import datetime
 
 # --- Custom CSS for button colors ---
 st.markdown("""
@@ -77,6 +78,7 @@ VISIBLE_FIELDS = [
 
 # --- Shared scanned barcodes CSV ---
 SCANNED_FILE = os.path.join(os.path.dirname(__file__), "..", "scanned_barcodes.csv")
+UNFOUND_FILE = os.path.join(os.path.dirname(__file__), "..", "unfound_barcodes.csv")
 
 def load_scanned_barcodes():
     if os.path.exists(SCANNED_FILE):
@@ -85,6 +87,14 @@ def load_scanned_barcodes():
 
 def save_scanned_barcodes(barcodes):
     pd.DataFrame({"barcode": barcodes}).to_csv(SCANNED_FILE, index=False)
+
+def load_unfound_barcodes():
+    if os.path.exists(UNFOUND_FILE):
+        return pd.read_csv(UNFOUND_FILE, dtype={"barcode": str})
+    return pd.DataFrame(columns=["barcode", "timestamp"])
+
+def save_unfound_barcodes(df):
+    df.to_csv(UNFOUND_FILE, index=False)
 
 # --- Load inventory ---
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
@@ -143,6 +153,20 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
                 st.experimental_rerun()
         else:
             st.error("Barcode not found in inventory.")
+            # Option to add to unfound table
+            with st.form(f"add_unfound_{cleaned}"):
+                add_unfound = st.form_submit_button("Add to Unfound Barcodes Table")
+                if add_unfound:
+                    unfound_df = load_unfound_barcodes()
+                    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    new_row = pd.DataFrame([{"barcode": cleaned, "timestamp": now}])
+                    unfound_df = pd.concat([unfound_df, new_row], ignore_index=True)
+                    save_unfound_barcodes(unfound_df)
+                    st.success(f"Barcode {cleaned} added to unfound table.")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    elif hasattr(st, "experimental_rerun"):
+                        st.experimental_rerun()
 
 # --- Empty Table Functionality with Confirmation Prompt ---
 st.markdown("#### Manage Scanned Products Table")
@@ -244,3 +268,18 @@ if not scanned_df.empty:
     )
 else:
     st.info("No scanned products to display.")
+
+# --- Unfound Barcodes Table at the Bottom ---
+st.markdown("### Unfound Barcodes Table")
+unfound_df = load_unfound_barcodes()
+if not unfound_df.empty:
+    unfound_df = unfound_df[::-1]  # Show most recent first
+    st.dataframe(unfound_df, width='stretch', hide_index=True)
+    st.download_button(
+        label="Download Unfound Table (CSV)",
+        data=unfound_df.to_csv(index=False).encode('utf-8'),
+        file_name="unfound_barcodes.csv",
+        mime="text/csv"
+    )
+else:
+    st.info("No unfound barcodes yet.")
