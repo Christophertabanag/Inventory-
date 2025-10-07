@@ -285,7 +285,7 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                     )
                 elif header == framecode_col:
                     input_values[header] = st.text_input(
-                        "FRAMENUM", value=st.session_state["framecode"], key=unique_key, help="Unique product frame code"
+                        "FRAMENUM", value=st.session_state["framecode"], key="framecode", help="Unique product frame code"
                     )
                 elif header.upper() == "MANUFACT":
                     input_values[header] = st.text_input("MANUFACTURER", value=smart_suggestion, key=unique_key)
