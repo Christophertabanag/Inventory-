@@ -204,8 +204,6 @@ if "add_product_expanded" not in st.session_state:
     st.session_state["add_product_expanded"] = False
 if "barcode" not in st.session_state:
     st.session_state["barcode"] = ""
-if "barcode_textinput" not in st.session_state:
-    st.session_state["barcode_textinput"] = ""
 if "framecode" not in st.session_state:
     st.session_state["framecode"] = ""
 if "edit_product_index" not in st.session_state:
@@ -241,7 +239,6 @@ btn_col1, btn_col2 = st.columns(2)
 with btn_col1:
     if st.button("Generate Barcode", key="generate_barcode_btn"):
         st.session_state["barcode"] = generate_unique_barcode(df)
-        st.session_state["barcode_textinput"] = st.session_state["barcode"]
         st.session_state["add_product_expanded"] = True
 with btn_col2:
     supplier_val = st.text_input(
@@ -373,8 +370,8 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                 else:
                     df.to_csv(INVENTORY_FILE, index=False)
                 st.success(f"✅ Product added successfully!")
+                # Do NOT reset st.session_state["barcode_textinput"] or st.session_state["framecode"] after widget instantiation!
                 st.session_state["barcode"] = ""
-                st.session_state["barcode_textinput"] = ""
                 st.session_state["framecode"] = ""
                 st.session_state["add_product_expanded"] = False
                 st.rerun()
