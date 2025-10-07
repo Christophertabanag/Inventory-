@@ -285,7 +285,7 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                     )
                 elif header == framecode_col:
                     input_values[header] = st.text_input(
-                        "FRAMENUM", value=st.session_state["framecode"], key="framecode", help="Unique product frame code"
+                        "FRAMENUM", key="framecode", help="Unique product frame code"
                     )
                 elif header.upper() == "MANUFACT":
                     input_values[header] = st.text_input("MANUFACTURER", value=smart_suggestion, key=unique_key)
@@ -335,7 +335,7 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
             required_fields = [barcode_col, framecode_col]
             missing = [field for field in required_fields if field in visible_headers and not input_values.get(field)]
             barcode_cleaned = clean_barcode(st.session_state["barcode_textinput"])
-            framecode_cleaned = clean_barcode(input_values.get(framecode_col, ""))
+            framecode_cleaned = clean_barcode(st.session_state["framecode"])
             df_barcodes_cleaned = df[barcode_col].map(clean_barcode)
             df_framecodes_cleaned = df[framecode_col].map(clean_barcode)
             if missing:
@@ -348,7 +348,9 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                 new_row = {}
                 for col in headers:
                     if col == barcode_col:
-                        val = clean_barcode(st.session_state["barcode_textinput"])
+                        val = barcode_cleaned
+                    elif col == framecode_col:
+                        val = framecode_cleaned
                     elif col in input_values:
                         val = input_values[col]
                         if col == "AVAILFROM" and isinstance(val, (datetime, pd.Timestamp)):
