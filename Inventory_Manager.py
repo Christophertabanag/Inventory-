@@ -373,11 +373,6 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                 st.success(f"✅ Product added successfully!")
                 # No auto-clear; user can clear fields manually if needed
 
-    # Optional: manual clear fields button for user convenience
-    if st.button("Clear Fields"):
-        st.session_state["barcode_textinput"] = ""
-        st.session_state["framecode"] = ""
-
 # --- The rest of your script (INVENTORY TABLE, DOWNLOADS, EDIT/DELETE, etc.) ---
 
 st.markdown('### Current Inventory')
