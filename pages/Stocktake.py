@@ -3,6 +3,40 @@ import pandas as pd
 import os
 import io
 
+# --- Custom CSS for button colors ---
+st.markdown("""
+    <style>
+    /* Main scan button green */
+    div.stButton > button[kind="primary"] {
+        background-color: #27ae60 !important;
+        color: white !important;
+        font-weight: bold;
+        border-radius: 6px;
+        border: none;
+        height: 38px;
+        min-width: 170px;
+    }
+    /* Empty table button red */
+    div[data-testid="column"] button#empty_scanned_btn {
+        background-color: #e74c3c !important;
+        color: white !important;
+        font-weight: bold;
+    }
+    /* Yes, Empty Table button blue */
+    button#confirm_empty_scanned_btn {
+        background-color: #3498db !important;
+        color: white !important;
+        font-weight: bold;
+    }
+    /* Cancel button yellow */
+    button#cancel_empty_scanned_btn {
+        background-color: #f1c40f !important;
+        color: black !important;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- Utility Functions (copy from your main script or utils) ---
 def clean_barcode(val):
     try:
@@ -95,7 +129,7 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
 st.markdown("#### Manage Scanned Products Table")
 clear_col, prompt_col = st.columns([1, 6], gap="small")
 with clear_col:
-    if st.button("🗑️ Empty All Scanned Products", key="empty_scanned_btn"):
+    if st.button("🗑️ Empty Table", key="empty_scanned_btn"):
         st.session_state["confirm_clear_scanned_barcodes"] = True
 
 if st.session_state.get("confirm_clear_scanned_barcodes", False):
