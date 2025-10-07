@@ -160,8 +160,13 @@ def format_inventory_table(input_df):
         df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
     return clean_nans(df_disp)
 
-# --- Table of scanned products as ONE table ---
-scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
+# --- Table of scanned products as ONE table, most recent on top ---
+ordered_barcodes = list(reversed(st.session_state["scanned_barcodes"]))
+scanned_df = df.set_index(barcode_col, drop=False)
+scanned_df = scanned_df.loc[
+    [b for b in ordered_barcodes if b in scanned_df.index]
+] if ordered_barcodes else pd.DataFrame(columns=df.columns)
+
 st.markdown("### Scanned Products Table")
 
 if not scanned_df.empty:
