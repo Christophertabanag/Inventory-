@@ -1,24 +1,18 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
-import random
 
-# --- You may want to import or copy utility functions from your main file ---
-# For example, if you use clean_barcode, force_all_columns_to_string, etc.,
-# you can import them if you put them in a separate utils.py
-# Or, for now, just copy those functions here.
-
+# Helper functions (copy from your main script or import if in utils)
 def clean_barcode(val):
-    if pd.isnull(val) or val == "":
-        return ""
-    s = str(val).strip().replace('\u200b','').replace('\u00A0','')
     try:
+        if pd.isnull(val) or val == "":
+            return ""
+        s = str(val).strip().replace('\u200b','').replace('\u00A0','')
         f = float(s)
         s = str(int(f))
-    except ValueError:
-        pass
-    return s
+        return s
+    except:
+        return str(val).strip()
 
 def force_all_columns_to_string(df):
     for col in df.columns:
@@ -28,7 +22,7 @@ def force_all_columns_to_string(df):
 def clean_nans(df):
     return df.replace([pd.NA, 'nan'], '', regex=True)
 
-# --- Load inventory file (you may want to DRY this with a utils file!) ---
+# Load inventory
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
 inventory_files = [f for f in os.listdir(INVENTORY_FOLDER) if f.lower().endswith(('.xlsx', '.csv'))]
 selected_file = inventory_files[0]
@@ -53,54 +47,60 @@ def load_inventory():
 
 df = load_inventory()
 barcode_col = "BARCODE"
+if barcode_col not in df.columns:
+    st.error(f"No {barcode_col} column found in your inventory file!")
+    st.stop()
 
-st.title("Stocktake")
+st.title("Stocktake - Scan Barcodes")
 
-st.write("Upload a file (CSV, Excel, or TXT) of scanned barcodes from your stock count.")
-uploaded_file = st.file_uploader("Upload scanned barcodes", type=["csv", "xlsx", "txt"])
-if uploaded_file is not None:
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            scanned_df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith(".xlsx"):
-            scanned_df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".txt"):
-            scanned_df = pd.read_csv(uploaded_file, delimiter=None)
-        else:
-            st.error("❌ Unsupported file type.")
-            scanned_df = None
-    except Exception as e:
-        st.error(f"❌ Error reading file: {e}")
-        scanned_df = None
+# --- Session state for scanned barcodes ---
+if "scanned_barcodes" not in st.session_state:
+    st.session_state["scanned_barcodes"] = []
 
-    if scanned_df is not None:
-        scanned_df = force_all_columns_to_string(scanned_df)
-        scanned_df[barcode_col] = scanned_df[barcode_col].map(clean_barcode)
-        st.write("Preview of your uploaded file:")
-        st.dataframe(clean_nans(scanned_df.head()), width='stretch')
-        barcode_candidates = [
-            col for col in scanned_df.columns
-            if "barcode" in col.lower() or "ean" in col.lower() or "upc" in col.lower() or "code" in col.lower()
-        ]
-        if not barcode_candidates:
-            barcode_candidates = scanned_df.columns.tolist()
-        barcode_column = st.selectbox(
-            "Select the column containing barcodes", barcode_candidates
+# --- Scan input ---
+scanned_barcode = st.text_input("Scan or enter barcode", value="", key="stocktake_scan_input")
+if st.button("Add Scanned Barcode"):
+    cleaned = clean_barcode(scanned_barcode)
+    if cleaned == "":
+        st.warning("Please scan or enter a barcode.")
+    elif cleaned in st.session_state["scanned_barcodes"]:
+        st.warning("Barcode already scanned in this session.")
+    elif cleaned in df[barcode_col].map(clean_barcode).values:
+        st.session_state["scanned_barcodes"].append(cleaned)
+        st.success(f"Added barcode: {cleaned}")
+    else:
+        st.error("Barcode not found in inventory.")
+    st.session_state["stocktake_scan_input"] = ""  # Clear input after scan
+
+# --- Table of scanned products ---
+scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
+st.markdown("### Scanned Products Table")
+st.dataframe(clean_nans(scanned_df), width='stretch')
+
+# --- Download scanned products ---
+if not scanned_df.empty:
+    st.download_button(
+        label="Download Scanned Table (CSV)",
+        data=clean_nans(scanned_df).to_csv(index=False).encode('utf-8'),
+        file_name="stocktake_scanned.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        label="Download Scanned Table (Excel)",
+        data=clean_nans(scanned_df).to_excel(index=False),
+        file_name="stocktake_scanned.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+# --- Optional: Show missing items ---
+if st.checkbox("Show missing products (in inventory but not scanned)"):
+    missing_df = df[~df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
+    st.markdown("### Missing Products")
+    st.dataframe(clean_nans(missing_df), width='stretch')
+    if not missing_df.empty:
+        st.download_button(
+            label="Download Missing Table (CSV)",
+            data=clean_nans(missing_df).to_csv(index=False).encode('utf-8'),
+            file_name="stocktake_missing.csv",
+            mime="text/csv"
         )
-        inventory_barcodes = set(df[barcode_col].map(clean_barcode))
-        scanned_barcodes = set(scanned_df[barcode_column].map(clean_barcode))
-        matched = inventory_barcodes & scanned_barcodes
-        missing = inventory_barcodes - scanned_barcodes
-        unexpected = scanned_barcodes - inventory_barcodes
-        st.success(f"✅ Matched items: {len(matched)}")
-        st.warning(f"⚠️ Missing items: {len(missing)}")
-        st.error(f"❌ Unexpected items: {len(unexpected)}")
-        if matched:
-            st.write("✅ Present items:")
-            st.dataframe(clean_nans(df[df[barcode_col].map(clean_barcode).isin(matched)]), width='stretch')
-        if missing:
-            st.write("❌ Missing items:")
-            st.dataframe(clean_nans(df[df[barcode_col].map(clean_barcode).isin(missing)]), width='stretch')
-        if unexpected:
-            st.write("⚠️ Unexpected items (not in system):")
-            st.write(list(unexpected))
