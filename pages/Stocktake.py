@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 import io
+from datetime import datetime
+import shutil
 
 # --- Custom CSS for button colors ---
 st.markdown("""
@@ -29,6 +31,9 @@ st.markdown("""
         background-color: #f1c40f !important;
         color: black !important;
         font-weight: bold;
+    }
+    .stAlert {
+        font-size: 1.1em;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -77,14 +82,58 @@ VISIBLE_FIELDS = [
 
 # --- Shared scanned barcodes CSV ---
 SCANNED_FILE = os.path.join(os.path.dirname(__file__), "..", "scanned_barcodes.csv")
+BACKUP_FOLDER = os.path.join(os.path.dirname(__file__), "..", "scanned_backups")
+os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
+def backup_scanned_file():
+    if os.path.exists(SCANNED_FILE):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        shutil.copy2(SCANNED_FILE, os.path.join(BACKUP_FOLDER, f"scanned_barcodes_{timestamp}.csv"))
 
 def load_scanned_barcodes():
     if os.path.exists(SCANNED_FILE):
-        return pd.read_csv(SCANNED_FILE)["barcode"].astype(str).tolist()
-    return []
+        df = pd.read_csv(SCANNED_FILE, dtype={"barcode": str})
+        # If no timestamp col, add it as empty
+        if "timestamp" not in df.columns:
+            df["timestamp"] = ""
+        return df
+    return pd.DataFrame(columns=["barcode", "timestamp"])
 
-def save_scanned_barcodes(barcodes):
-    pd.DataFrame({"barcode": barcodes}).to_csv(SCANNED_FILE, index=False)
+def save_scanned_barcodes(df):
+    df.to_csv(SCANNED_FILE, index=False)
+
+def add_scan(barcode):
+    df = load_scanned_barcodes()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    new_row = {"barcode": barcode, "timestamp": now}
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    backup_scanned_file()
+    save_scanned_barcodes(df)
+
+def remove_scan(barcode, timestamp=None):
+    df = load_scanned_barcodes()
+    if timestamp:
+        df = df[~((df["barcode"] == barcode) & (df["timestamp"] == timestamp))]
+    else:
+        df = df[df["barcode"] != barcode]
+    backup_scanned_file()
+    save_scanned_barcodes(df)
+
+def clear_scans():
+    backup_scanned_file()
+    save_scanned_barcodes(pd.DataFrame(columns=["barcode", "timestamp"]))
+
+def undo_last_scan():
+    df = load_scanned_barcodes()
+    if not df.empty:
+        df = df.iloc[:-1]
+        backup_scanned_file()
+        save_scanned_barcodes(df)
+        return True
+    return False
+
+def get_duplicates(df):
+    return df["barcode"][df.duplicated("barcode", keep=False)]
 
 # --- Load inventory ---
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
@@ -118,10 +167,10 @@ if barcode_col not in df.columns:
 # Clean the DataFrame barcodes as strings
 df[barcode_col] = df[barcode_col].map(clean_barcode).astype(str)
 
-st.title("Stocktake - Scan Barcodes (Shared)")
+st.title("Stocktake - Scan Barcodes (Shared, Robust)")
 
-# --- Shared scanned barcodes list ---
-scanned_barcodes = load_scanned_barcodes()
+# --- Load and display scanned barcodes (with timestamp) ---
+scanned_df = load_scanned_barcodes()
 
 # --- Scan input using a form (clears on submit) ---
 with st.form("stocktake_scan_form", clear_on_submit=True):
@@ -130,19 +179,29 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
     if submit:
         cleaned = clean_barcode(scanned_barcode)
         if cleaned == "":
-            st.warning("Please scan or enter a barcode.")
-        elif cleaned in scanned_barcodes:
-            st.warning("Barcode already scanned.")
-        elif cleaned in df[barcode_col].values:
-            scanned_barcodes.append(str(cleaned))
-            save_scanned_barcodes(scanned_barcodes)
-            st.success(f"Added barcode: {cleaned}")
+            st.error("❌ Please scan or enter a barcode.")
+        elif cleaned not in df[barcode_col].values:
+            st.error("❌ Barcode not found in inventory.")
+        else:
+            # Allow duplicate scans, but highlight them in table
+            add_scan(cleaned)
+            st.success(f"✅ Added barcode: {cleaned}")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            elif hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
+
+# --- Undo Last Scan Button ---
+if not scanned_df.empty:
+    if st.button("Undo Last Scan"):
+        if undo_last_scan():
+            st.info("Last scan undone.")
             if hasattr(st, "rerun"):
                 st.rerun()
             elif hasattr(st, "experimental_rerun"):
                 st.experimental_rerun()
         else:
-            st.error("Barcode not found in inventory.")
+            st.warning("No scan to undo.")
 
 # --- Empty Table Functionality with Confirmation Prompt ---
 st.markdown("#### Manage Scanned Products Table")
@@ -157,8 +216,7 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
         yes_col, no_col = st.columns([1, 1])
         with yes_col:
             if st.button("Yes, Empty Table", key="confirm_empty_scanned_btn"):
-                scanned_barcodes = []
-                save_scanned_barcodes(scanned_barcodes)
+                clear_scans()
                 st.session_state["confirm_clear_scanned_barcodes"] = False
                 st.success("Scanned products table emptied.")
                 if hasattr(st, "rerun"):
@@ -169,50 +227,80 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
             if st.button("Cancel", key="cancel_empty_scanned_btn"):
                 st.session_state["confirm_clear_scanned_barcodes"] = False
 
-# --- Table formatting helper ---
-def format_inventory_table(input_df):
-    df_disp = input_df.copy()
-    cols = [col for col in VISIBLE_FIELDS if col in df_disp.columns]
-    df_disp = df_disp[cols]
-    if "BARCODE" in df_disp.columns:
-        df_disp["BARCODE"] = df_disp["BARCODE"].map(clean_barcode)
-    if "RRP" in df_disp.columns:
-        df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
-    return clean_nans(df_disp)
+# --- Search & Filter ---
+search_query = st.text_input("🔎 Search scanned barcodes / product details")
 
-# --- Table of scanned products as ONE table, most recent scan on top ---
-ordered_barcodes = list(reversed(scanned_barcodes))
-present_barcodes = [b for b in ordered_barcodes if b in df[barcode_col].values]
-scanned_df = df[df[barcode_col].isin(present_barcodes)]
-if not scanned_df.empty:
-    scanned_df = scanned_df.assign(
-        __order=scanned_df[barcode_col].apply(lambda x: present_barcodes.index(x))
-    ).sort_values('__order').drop(columns='__order')
-    display_df = clean_for_display(scanned_df)
-    display_df = display_df[[col for col in VISIBLE_FIELDS if col in display_df.columns]]
+# --- Build scanned table (latest scan on top) ---
+display_scans = scanned_df.copy()
+display_scans = display_scans[::-1]  # most recent first
+
+# Merge with inventory for product details
+if not display_scans.empty:
+    merged = display_scans.merge(
+        df,
+        left_on="barcode",
+        right_on=barcode_col,
+        how="left",
+        suffixes=('', '_inv')
+    )
+    merged["Duplicate"] = merged["barcode"].isin(get_duplicates(display_scans))
+    merged["Timestamp"] = merged["timestamp"]
+    merged = merged.drop(columns=[barcode_col, "timestamp"], errors="ignore")
+    # Place important columns first
+    order = ["barcode", "Timestamp", "Duplicate"] + [col for col in VISIBLE_FIELDS if col in merged.columns]
+    merged = merged[[col for col in order if col in merged.columns]]
+
+    # --- Search & filter logic ---
+    if search_query.strip():
+        mask = pd.Series(False, index=merged.index)
+        for col in merged.columns:
+            mask = mask | merged[col].astype(str).str.contains(search_query, case=False, na=False)
+        merged = merged[mask]
+
+    # --- Highlight duplicates ---
+    def highlight_dupes(val, is_dup):
+        if is_dup:
+            return "background-color: #ffe6e6; color: #d9534f; font-weight:bold;"
+        return ""
+
     st.markdown("### Scanned Products Table")
-    st.dataframe(display_df, width='stretch', hide_index=True)
+    st.dataframe(
+        merged.style.apply(
+            lambda row: [highlight_dupes(v, row["Duplicate"]) if col == "barcode" else "" for col, v in row.items()],
+            axis=1
+        ),
+        width='stretch',
+        hide_index=True
+    )
 
-    # Remove functionality: select barcode and remove with button
-    remove_options = display_df["BARCODE"].tolist()
-    if remove_options:
-        remove_barcode = st.selectbox("Select a barcode to remove", remove_options)
-        if st.button("Remove Selected"):
-            scanned_barcodes = [b for b in scanned_barcodes if b != remove_barcode]
-            save_scanned_barcodes(scanned_barcodes)
+    # --- Remove a specific scan by barcode and timestamp ---
+    st.markdown("Remove a specific scan:")
+    remove_row = st.selectbox(
+        "Choose scan to remove",
+        options=merged[["barcode", "Timestamp"]].apply(lambda r: f"{r['barcode']} @ {r['Timestamp']}", axis=1) if not merged.empty else [],
+        key="remove_selectbox"
+    )
+    if st.button("Remove Selected"):
+        if remove_row:
+            barcode, ts = remove_row.split(' @ ')
+            remove_scan(barcode, ts)
+            st.success(f"Removed scan: {barcode} @ {ts}")
             if hasattr(st, "rerun"):
                 st.rerun()
             elif hasattr(st, "experimental_rerun"):
                 st.experimental_rerun()
+        else:
+            st.warning("No scan selected for removal.")
 
+    # --- Download scanned products ---
     st.download_button(
         label="Download Scanned Table (CSV)",
-        data=format_inventory_table(scanned_df).to_csv(index=False).encode('utf-8'),
+        data=merged.to_csv(index=False).encode('utf-8'),
         file_name="stocktake_scanned.csv",
         mime="text/csv"
     )
     excel_buffer = io.BytesIO()
-    format_inventory_table(scanned_df).to_excel(excel_buffer, index=False)
+    merged.to_excel(excel_buffer, index=False)
     excel_buffer.seek(0)
     st.download_button(
         label="Download Scanned Table (Excel)",
@@ -225,18 +313,18 @@ else:
 
 # --- Optional: Show missing items ---
 if st.checkbox("Show missing products (in inventory but not scanned)"):
-    missing_df = df[~df[barcode_col].isin(scanned_barcodes)]
+    missing_df = df[~df[barcode_col].isin(scanned_df["barcode"].tolist())]
     st.markdown("### Missing Products")
-    st.dataframe(format_inventory_table(missing_df), width='stretch')
+    st.dataframe(clean_for_display(missing_df), width='stretch')
     if not missing_df.empty:
         st.download_button(
             label="Download Missing Table (CSV)",
-            data=format_inventory_table(missing_df).to_csv(index=False).encode('utf-8'),
+            data=clean_for_display(missing_df).to_csv(index=False).encode('utf-8'),
             file_name="stocktake_missing.csv",
             mime="text/csv"
         )
         excel_buffer_missing = io.BytesIO()
-        format_inventory_table(missing_df).to_excel(excel_buffer_missing, index=False)
+        clean_for_display(missing_df).to_excel(excel_buffer_missing, index=False)
         excel_buffer_missing.seek(0)
         st.download_button(
             label="Download Missing Table (Excel)",
@@ -244,3 +332,25 @@ if st.checkbox("Show missing products (in inventory but not scanned)"):
             file_name="stocktake_missing.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+# --- Backup management ---
+if st.checkbox("Show available backups and restore"):
+    backups = sorted([f for f in os.listdir(BACKUP_FOLDER) if f.endswith('.csv')])
+    if backups:
+        selected_backup = st.selectbox("Select a backup to restore", backups)
+        if st.button("Restore Selected Backup"):
+            backup_path = os.path.join(BACKUP_FOLDER, selected_backup)
+            shutil.copy2(backup_path, SCANNED_FILE)
+            st.success(f"Restored backup: {selected_backup}")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            elif hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
+        st.download_button(
+            label="Download Selected Backup",
+            data=open(os.path.join(BACKUP_FOLDER, selected_backup), "rb").read(),
+            file_name=selected_backup,
+            mime="text/csv"
+        )
+    else:
+        st.info("No backups available yet.")
