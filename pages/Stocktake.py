@@ -167,7 +167,7 @@ st.markdown("### Scanned Products Table")
 if not scanned_df.empty:
     display_df = clean_for_display(scanned_df)
     display_df = display_df[[col for col in VISIBLE_FIELDS if col in display_df.columns]]
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    st.dataframe(display_df, width='stretch', hide_index=True)
 
     # Remove functionality: select barcode and remove with button
     remove_options = display_df["BARCODE"].tolist()
