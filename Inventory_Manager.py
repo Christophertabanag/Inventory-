@@ -7,28 +7,6 @@ import barcode
 from barcode.writer import ImageWriter
 import io
 
-# --- SESSION STATE PATCHES FOR SAFE BARCODE/FRAMECODE HANDLING ---
-if st.session_state.get("clear_barcode_textinput", False):
-    st.session_state["barcode_textinput"] = ""
-    st.session_state["clear_barcode_textinput"] = False
-    st.experimental_rerun()
-
-if st.session_state.get("set_barcode_textinput", False):
-    st.session_state["barcode_textinput"] = st.session_state.get("barcode", "")
-    st.session_state["set_barcode_textinput"] = False
-    st.experimental_rerun()
-
-if st.session_state.get("clear_framecode", False):
-    st.session_state["framecode"] = ""
-    st.session_state["clear_framecode"] = False
-    st.experimental_rerun()
-
-if st.session_state.get("set_framecode", False):
-    # No-op: framecode already set.
-    st.session_state["set_framecode"] = False
-    st.experimental_rerun()
-# ------------------------------------------------------------------
-
 # --- Custom CSS for green buttons and narrower textfields ---
 st.markdown("""
     <style>
@@ -222,6 +200,7 @@ FRSTATUS_OPTIONS = ["CONSIGNMENT OWNED", "PRACTICE OWNED"]
 TAXPC_OPTIONS = [f"GST {i}%" for i in range(1, 21)]
 SIZE_OPTIONS = [f"{i:02d}-{j:02d}" for i in range(100) for j in range(100)]
 
+# --- Session state initialization ---
 if "add_product_expanded" not in st.session_state:
     st.session_state["add_product_expanded"] = False
 if "barcode" not in st.session_state:
@@ -261,30 +240,24 @@ st.title("Inventory Manager")
 st.markdown("#### Generate Unique Barcodes")
 btn_col1, btn_col2 = st.columns(2)
 with btn_col1:
-    if st.button("Generate Barcode", key="generate_barcode_btn"):
-        st.session_state["barcode"] = generate_unique_barcode(df)
-        st.session_state["set_barcode_textinput"] = True
+    if st.button("Generate Barcode"):
+        st.session_state["barcode_textinput"] = generate_unique_barcode(df)
         st.session_state["add_product_expanded"] = True
-        st.experimental_rerun()
 with btn_col2:
     supplier_val = st.text_input(
-        "Enter Supplier for Framecode Generation",
-        value=st.session_state.get("supplier_for_framecode", ""),
+        "Supplier for Framecode Generation",
         key="supplier_for_framecode",
-        on_change=None,
     )
-    if st.button("Generate Framecode", key="generate_framecode_btn"):
+    if st.button("Generate Framecode"):
         if st.session_state["supplier_for_framecode"]:
             st.session_state["framecode"] = generate_framecode(st.session_state["supplier_for_framecode"], df)
-            st.session_state["set_framecode"] = True
             st.session_state["add_product_expanded"] = True
-            st.experimental_rerun()
         else:
             st.warning("⚠️ Please enter a supplier name first.")
 
-if st.session_state["barcode"]:
+if st.session_state["barcode_textinput"]:
     st.markdown("#### Barcode Image")
-    img_buffer = generate_barcode_image(st.session_state["barcode"])
+    img_buffer = generate_barcode_image(st.session_state["barcode_textinput"])
     if img_buffer:
         st.image(img_buffer, width=220)
 
@@ -398,11 +371,14 @@ with st.expander("➕ Add a New Product", expanded=st.session_state["add_product
                 else:
                     df.to_csv(INVENTORY_FILE, index=False)
                 st.success(f"✅ Product added successfully!")
-                # Use flags to clear barcode/framecode fields safely
-                st.session_state["clear_barcode_textinput"] = True
-                st.session_state["clear_framecode"] = True
-                st.session_state["add_product_expanded"] = False
-                st.experimental_rerun()
+                # No auto-clear; user can clear fields manually if needed
+
+    # Optional: manual clear fields button for user convenience
+    if st.button("Clear Fields"):
+        st.session_state["barcode_textinput"] = ""
+        st.session_state["framecode"] = ""
+
+# --- The rest of your script (INVENTORY TABLE, DOWNLOADS, EDIT/DELETE, etc.) ---
 
 st.markdown('### Current Inventory')
 df_display = df.copy()
