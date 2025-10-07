@@ -23,6 +23,21 @@ def force_all_columns_to_string(df):
 def clean_nans(df):
     return df.replace([pd.NA, 'nan'], '', regex=True)
 
+def format_rrp(val):
+    try:
+        f = float(str(val).replace("$", "").strip())
+        return f"${f:.2f}"
+    except Exception:
+        return "$0.00"
+
+# --- Use the same VISIBLE_FIELDS as your main script ---
+VISIBLE_FIELDS = [
+    "BARCODE", "LOCATION", "FRAMENUM", "MANUFACT", "MODEL", "SIZE",
+    "FCOLOUR", "FRAMETYPE", "F GROUP", "SUPPLIER", "QUANTITY", "F TYPE", "TEMPLE",
+    "DEPTH", "DIAG", "BASECURVE", "RRP", "EXCOSTPR", "COST PRICE", "TAXPC",
+    "FRSTATUS", "AVAILFROM", "NOTE"
+]
+
 # --- Load inventory ---
 INVENTORY_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Inventory")
 inventory_files = [f for f in os.listdir(INVENTORY_FOLDER) if f.lower().endswith(('.xlsx', '.csv'))]
@@ -74,22 +89,35 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
         else:
             st.error("Barcode not found in inventory.")
 
+# --- Table formatting helper ---
+def format_inventory_table(input_df):
+    df_disp = input_df.copy()
+    # Only keep columns that exist & match the order in VISIBLE_FIELDS
+    cols = [col for col in VISIBLE_FIELDS if col in df_disp.columns]
+    df_disp = df_disp[cols]
+    # Format columns as in Inventory Manager
+    if "BARCODE" in df_disp.columns:
+        df_disp["BARCODE"] = df_disp["BARCODE"].map(clean_barcode)
+    if "RRP" in df_disp.columns:
+        df_disp["RRP"] = df_disp["RRP"].apply(format_rrp).astype(str)
+    return clean_nans(df_disp)
+
 # --- Table of scanned products ---
 scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
 st.markdown("### Scanned Products Table")
-st.dataframe(clean_nans(scanned_df), width='stretch')
+st.dataframe(format_inventory_table(scanned_df), width='stretch')
 
 # --- Download scanned products ---
 if not scanned_df.empty:
     st.download_button(
         label="Download Scanned Table (CSV)",
-        data=clean_nans(scanned_df).to_csv(index=False).encode('utf-8'),
+        data=format_inventory_table(scanned_df).to_csv(index=False).encode('utf-8'),
         file_name="stocktake_scanned.csv",
         mime="text/csv"
     )
     # Excel download with BytesIO buffer
     excel_buffer = io.BytesIO()
-    clean_nans(scanned_df).to_excel(excel_buffer, index=False)
+    format_inventory_table(scanned_df).to_excel(excel_buffer, index=False)
     excel_buffer.seek(0)
     st.download_button(
         label="Download Scanned Table (Excel)",
@@ -102,16 +130,16 @@ if not scanned_df.empty:
 if st.checkbox("Show missing products (in inventory but not scanned)"):
     missing_df = df[~df[barcode_col].map(clean_barcode).isin(st.session_state["scanned_barcodes"])]
     st.markdown("### Missing Products")
-    st.dataframe(clean_nans(missing_df), width='stretch')
+    st.dataframe(format_inventory_table(missing_df), width='stretch')
     if not missing_df.empty:
         st.download_button(
             label="Download Missing Table (CSV)",
-            data=clean_nans(missing_df).to_csv(index=False).encode('utf-8'),
+            data=format_inventory_table(missing_df).to_csv(index=False).encode('utf-8'),
             file_name="stocktake_missing.csv",
             mime="text/csv"
         )
         excel_buffer_missing = io.BytesIO()
-        clean_nans(missing_df).to_excel(excel_buffer_missing, index=False)
+        format_inventory_table(missing_df).to_excel(excel_buffer_missing, index=False)
         excel_buffer_missing.seek(0)
         st.download_button(
             label="Download Missing Table (Excel)",
