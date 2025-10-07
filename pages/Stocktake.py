@@ -6,7 +6,6 @@ import io
 # --- Custom CSS for button colors ---
 st.markdown("""
     <style>
-    /* Main scan button green */
     div.stButton > button[kind="primary"] {
         background-color: #27ae60 !important;
         color: white !important;
@@ -16,19 +15,16 @@ st.markdown("""
         height: 38px;
         min-width: 170px;
     }
-    /* Empty table button red */
     div[data-testid="column"] button#empty_scanned_btn {
         background-color: #e74c3c !important;
         color: white !important;
         font-weight: bold;
     }
-    /* Yes, Empty Table button blue */
     button#confirm_empty_scanned_btn {
         background-color: #3498db !important;
         color: white !important;
         font-weight: bold;
     }
-    /* Cancel button yellow */
     button#cancel_empty_scanned_btn {
         background-color: #f1c40f !important;
         color: black !important;
@@ -37,7 +33,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Utility Functions (copy from your main script or utils) ---
+# --- Utility Functions ---
 def clean_barcode(val):
     try:
         if pd.isnull(val) or val == "":
@@ -64,7 +60,15 @@ def format_rrp(val):
     except Exception:
         return "$0.00"
 
-# --- Use the same VISIBLE_FIELDS as your main script ---
+def clean_for_display(df):
+    df = df.copy()
+    if "BARCODE" in df.columns:
+        df["BARCODE"] = df["BARCODE"].apply(lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.','',1).isdigit() and float(x).is_integer() else x)
+    if "QUANTITY" in df.columns:
+        df["QUANTITY"] = df["QUANTITY"].apply(lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.','',1).isdigit() and float(x).is_integer() else x)
+    df = df.replace("nan", "").replace(pd.NA, "").replace(float("nan"), "")
+    return df
+
 VISIBLE_FIELDS = [
     "BARCODE", "LOCATION", "FRAMENUM", "MANUFACT", "MODEL", "SIZE",
     "FCOLOUR", "FRAMETYPE", "F GROUP", "SUPPLIER", "QUANTITY", "F TYPE", "TEMPLE",
@@ -148,10 +152,8 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
 # --- Table formatting helper ---
 def format_inventory_table(input_df):
     df_disp = input_df.copy()
-    # Only keep columns that exist & match the order in VISIBLE_FIELDS
     cols = [col for col in VISIBLE_FIELDS if col in df_disp.columns]
     df_disp = df_disp[cols]
-    # Format columns as in Inventory Manager
     if "BARCODE" in df_disp.columns:
         df_disp["BARCODE"] = df_disp["BARCODE"].map(clean_barcode)
     if "RRP" in df_disp.columns:
@@ -163,15 +165,16 @@ scanned_df = df[df[barcode_col].map(clean_barcode).isin(st.session_state["scanne
 st.markdown("### Scanned Products Table")
 
 if not scanned_df.empty:
-    for i, row in scanned_df.iterrows():
+    display_df = clean_for_display(scanned_df)
+    for i, row in display_df.iterrows():
         cols = st.columns([8, 1])
         with cols[0]:
-            # Show product as a flat string for clarity (or use st.write(row) for dict-style)
-            show_row = {col: row[col] for col in scanned_df.columns}
-            st.write(show_row)
+            # Only display VISIBLE_FIELDS that exist
+            display_row = pd.DataFrame([row])
+            display_row = display_row[[col for col in VISIBLE_FIELDS if col in display_row.columns]]
+            st.dataframe(display_row, use_container_width=True, hide_index=True)
         with cols[1]:
-            if st.button("Remove", key=f"remove_scanned_{row[barcode_col]}"):
-                # Remove this barcode from scanned list
+            if st.button("Remove", key=f"remove_scanned_{row[barcode_col]}_{i}"):
                 st.session_state["scanned_barcodes"] = [
                     b for b in st.session_state["scanned_barcodes"]
                     if clean_barcode(b) != clean_barcode(row[barcode_col])
@@ -184,7 +187,6 @@ if not scanned_df.empty:
         file_name="stocktake_scanned.csv",
         mime="text/csv"
     )
-    # Excel download with BytesIO buffer
     excel_buffer = io.BytesIO()
     format_inventory_table(scanned_df).to_excel(excel_buffer, index=False)
     excel_buffer.seek(0)
