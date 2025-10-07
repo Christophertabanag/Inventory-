@@ -133,6 +133,10 @@ st.title("Stocktake - Scan Barcodes (Shared)")
 # --- Shared scanned barcodes list ---
 scanned_barcodes = load_scanned_barcodes()
 
+# --- Track the last unfound barcode in session state ---
+if "last_unfound_barcode" not in st.session_state:
+    st.session_state["last_unfound_barcode"] = None
+
 # --- Scan input using a form (clears on submit) ---
 with st.form("stocktake_scan_form", clear_on_submit=True):
     scanned_barcode = st.text_input("Scan or enter barcode", key="stocktake_scan_input")
@@ -141,29 +145,38 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
         cleaned = clean_barcode(scanned_barcode)
         if cleaned == "":
             st.warning("Please scan or enter a barcode.")
+            st.session_state["last_unfound_barcode"] = None
         elif cleaned in scanned_barcodes:
             st.warning("Barcode already scanned.")
+            st.session_state["last_unfound_barcode"] = None
         elif cleaned in df[barcode_col].values:
             scanned_barcodes.append(str(cleaned))
             save_scanned_barcodes(scanned_barcodes)
             st.success(f"Added barcode: {cleaned}")
+            st.session_state["last_unfound_barcode"] = None
             if hasattr(st, "rerun"):
                 st.rerun()
             elif hasattr(st, "experimental_rerun"):
                 st.experimental_rerun()
         else:
             st.error("Barcode not found in inventory.")
-            if st.button("Add to Unfound Barcodes Table", key=f"add_unfound_{cleaned}"):
-                unfound_df = load_unfound_barcodes()
-                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                new_row = pd.DataFrame([{"barcode": cleaned, "timestamp": now}])
-                unfound_df = pd.concat([unfound_df, new_row], ignore_index=True)
-                save_unfound_barcodes(unfound_df)
-                st.success(f"Barcode {cleaned} added to unfound table.")
-                if hasattr(st, "rerun"):
-                    st.rerun()
-                elif hasattr(st, "experimental_rerun"):
-                    st.experimental_rerun()
+            st.session_state["last_unfound_barcode"] = cleaned
+
+# --- Show button to add last unfound barcode (outside the form) ---
+if st.session_state.get("last_unfound_barcode", None):
+    cleaned = st.session_state["last_unfound_barcode"]
+    if st.button("Add to Unfound Barcodes Table", key=f"add_unfound_{cleaned}"):
+        unfound_df = load_unfound_barcodes()
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        new_row = pd.DataFrame([{"barcode": cleaned, "timestamp": now}])
+        unfound_df = pd.concat([unfound_df, new_row], ignore_index=True)
+        save_unfound_barcodes(unfound_df)
+        st.success(f"Barcode {cleaned} added to unfound table.")
+        st.session_state["last_unfound_barcode"] = None
+        if hasattr(st, "rerun"):
+            st.rerun()
+        elif hasattr(st, "experimental_rerun"):
+            st.experimental_rerun()
 
 # --- Empty Table Functionality with Confirmation Prompt ---
 st.markdown("#### Manage Scanned Products Table")
