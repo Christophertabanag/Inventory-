@@ -169,6 +169,28 @@ if st.session_state.get("confirm_clear_scanned_barcodes", False):
             if st.button("Cancel", key="cancel_empty_scanned_btn"):
                 st.session_state["confirm_clear_scanned_barcodes"] = False
 
+# --- Optional: Show missing items ---
+if st.checkbox("Show missing products (in inventory but not scanned)"):
+    missing_df = df[~df[barcode_col].isin(scanned_barcodes)]
+    st.markdown("### Missing Products")
+    st.dataframe(format_inventory_table(missing_df), width='stretch')
+    if not missing_df.empty:
+        st.download_button(
+            label="Download Missing Table (CSV)",
+            data=format_inventory_table(missing_df).to_csv(index=False).encode('utf-8'),
+            file_name="stocktake_missing.csv",
+            mime="text/csv"
+        )
+        excel_buffer_missing = io.BytesIO()
+        format_inventory_table(missing_df).to_excel(excel_buffer_missing, index=False)
+        excel_buffer_missing.seek(0)
+        st.download_button(
+            label="Download Missing Table (Excel)",
+            data=excel_buffer_missing,
+            file_name="stocktake_missing.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
 # --- Table formatting helper ---
 def format_inventory_table(input_df):
     df_disp = input_df.copy()
@@ -222,25 +244,3 @@ if not scanned_df.empty:
     )
 else:
     st.info("No scanned products to display.")
-
-# --- Optional: Show missing items ---
-if st.checkbox("Show missing products (in inventory but not scanned)"):
-    missing_df = df[~df[barcode_col].isin(scanned_barcodes)]
-    st.markdown("### Missing Products")
-    st.dataframe(format_inventory_table(missing_df), width='stretch')
-    if not missing_df.empty:
-        st.download_button(
-            label="Download Missing Table (CSV)",
-            data=format_inventory_table(missing_df).to_csv(index=False).encode('utf-8'),
-            file_name="stocktake_missing.csv",
-            mime="text/csv"
-        )
-        excel_buffer_missing = io.BytesIO()
-        format_inventory_table(missing_df).to_excel(excel_buffer_missing, index=False)
-        excel_buffer_missing.seek(0)
-        st.download_button(
-            label="Download Missing Table (Excel)",
-            data=excel_buffer_missing,
-            file_name="stocktake_missing.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
