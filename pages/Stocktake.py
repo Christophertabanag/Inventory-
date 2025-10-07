@@ -153,20 +153,17 @@ with st.form("stocktake_scan_form", clear_on_submit=True):
                 st.experimental_rerun()
         else:
             st.error("Barcode not found in inventory.")
-            # Option to add to unfound table
-            with st.form(f"add_unfound_{cleaned}"):
-                add_unfound = st.form_submit_button("Add to Unfound Barcodes Table")
-                if add_unfound:
-                    unfound_df = load_unfound_barcodes()
-                    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    new_row = pd.DataFrame([{"barcode": cleaned, "timestamp": now}])
-                    unfound_df = pd.concat([unfound_df, new_row], ignore_index=True)
-                    save_unfound_barcodes(unfound_df)
-                    st.success(f"Barcode {cleaned} added to unfound table.")
-                    if hasattr(st, "rerun"):
-                        st.rerun()
-                    elif hasattr(st, "experimental_rerun"):
-                        st.experimental_rerun()
+            if st.button("Add to Unfound Barcodes Table", key=f"add_unfound_{cleaned}"):
+                unfound_df = load_unfound_barcodes()
+                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                new_row = pd.DataFrame([{"barcode": cleaned, "timestamp": now}])
+                unfound_df = pd.concat([unfound_df, new_row], ignore_index=True)
+                save_unfound_barcodes(unfound_df)
+                st.success(f"Barcode {cleaned} added to unfound table.")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                elif hasattr(st, "experimental_rerun"):
+                    st.experimental_rerun()
 
 # --- Empty Table Functionality with Confirmation Prompt ---
 st.markdown("#### Manage Scanned Products Table")
