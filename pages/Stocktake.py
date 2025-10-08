@@ -140,7 +140,7 @@ if barcode_col not in df.columns:
 # Clean the DataFrame barcodes as strings
 df[barcode_col] = df[barcode_col].map(clean_barcode).astype(str)
 
-st.title("Stocktake - Scan Barcodes (Shared)")
+st.title("Stocktake - Scan Barcodes")
 
 # --- Shared scanned barcodes list ---
 scanned_barcodes = load_scanned_barcodes()
