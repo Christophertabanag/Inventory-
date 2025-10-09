@@ -4,6 +4,8 @@ import os
 import io
 from datetime import datetime
 
+st.set_page_config(layout="wide")  # <--- Add this line right here!
+
 # Barcode image generation
 import barcode
 from barcode.writer import ImageWriter
